@@ -1,4 +1,19 @@
 {
+    "name": "shinidev/shopee-product-scraper",
+    "description": "A shopee product scraper",
+    "type": "project",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Shinidev\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "ShiniDev",
+            "email": "markjoefreylaurente@gmail.com"
+        }
+    ],
     "require": {
         "symfony/panther": "^2.0",
         "fabpot/goutte": "^4.0"
