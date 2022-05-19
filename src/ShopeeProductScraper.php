@@ -58,7 +58,20 @@ class ShopeeProductScraper
         $keyword = "";
         for ($i = 1, $len = count($args); $i < $len; ++$i) {
             if (substr($args[$i], 0, 2) == '--') {
-                $option = substr($args[$i], 2, strlen($args[$i]) - 1);
+                $command = substr($args[$i], 2, strlen($args[$i]) - 1);
+                switch ($command) {
+                    case 'help':
+                        echo "Usage: php scraper.php [OPTIONS] [KEYWORDS]\n\n";
+                        echo "Options:\n";
+                        echo "\t-verbose\t\t\tPrint verbose messages\n";
+                        echo "\t-has-sold\t\t\tOnly scrape products with sales\n";
+                        die();
+                    default:
+                        echo "Unknown command: " . $command . "\n";
+                        break;
+                }
+            } else if (substr($args[$i], 0, 1) == '-') {
+                $option = substr($args[$i], 1, strlen($args[$i]) - 1);
                 switch ($option) {
                     case 'verbose':
                         self::$verbose = true;
@@ -67,6 +80,7 @@ class ShopeeProductScraper
                         self::$hasSales = true;
                         break;
                     default:
+                        echo "Unknown option: " . $option . "\n";
                         break;
                 }
                 continue;
