@@ -193,31 +193,43 @@ class ShopeeProductScraper
         $this->logMsg("Scraping products...");
         $this->crawler->filter(self::pageClass[ShopeeConstants::PRODUCT_ROOT])->each(function ($node) {
             $children = $node->children();
-            $ad = $children->filter(self::pageClass[ShopeeConstants::PRODUCT_AD])->count() > 0;
-            $sold = $children->filter(self::pageClass[ShopeeConstants::PRODUCT_SOLD])->text(self::failMsg);
-            if ($ad) {
+
+            $ad = $children->filter(self::pageClass[ShopeeConstants::PRODUCT_AD]);
+            $sold = $children->filter(self::pageClass[ShopeeConstants::PRODUCT_SOLD]);
+            $name = $children->filter(self::pageClass[ShopeeConstants::PRODUCT_NAME]);
+            $url = self::baseUrl . $node->attr('href');
+            $imageUrl = $children->filter(self::pageClass[ShopeeConstants::PRODUCT_IMAGE]);
+            $location = $children->filter(self::pageClass[ShopeeConstants::PRODUCT_LOCATION]);
+            $currency = $children->filter(self::pageClass[ShopeeConstants::PRODUCT_CURRENCY]);
+            $price = $children->filter(self::pageClass[ShopeeConstants::PRODUCT_PRICE]);
+            $originalPrice = $children->filter(self::pageClass[ShopeeConstants::PRODUCT_ORIGINAL_PRICE]);
+
+            if ($ad->count() > 0) {
                 return;
             }
-            if (self::$hasSales && $sold == "") {
+            if (self::$hasSales && $sold->text(self::failMsg) == "") {
                 return;
             }
-            $shopeeProduct = new ShopeeProduct($children->filter(self::pageClass[ShopeeConstants::PRODUCT_NAME])->text(self::failMsg));
+            $shopeeProduct = new ShopeeProduct($name->text(self::failMsg));
             $shopeeProduct->url = self::baseUrl . $node->attr('href');
-            $shopeeProduct->location = $children->filter(self::pageClass[ShopeeConstants::PRODUCT_LOCATION])->text(self::failMsg);
-            $shopeeProduct->sold = $sold;
-            $shopeeProduct->currency = $children->filter(self::pageClass[ShopeeConstants::PRODUCT_CURRENCY])->eq(0)->text(self::failMsg);
-            $shopeeProduct->price = $children->filter(self::pageClass[ShopeeConstants::PRODUCT_PRICE])->eq(0)->text(self::failMsg);
-            if ($children->filter(self::pageClass[ShopeeConstants::PRODUCT_PRICE])->count() > 1) {
+            $shopeeProduct->location = $location->text(self::failMsg);
+            $shopeeProduct->sold = $sold->text(self::failMsg);
+            $shopeeProduct->currency = $currency->eq(0)->text(self::failMsg);
+            $shopeeProduct->price = $price->eq(0)->text(self::failMsg);
+            if ($price->count() > 1) {
                 $shopeeProduct->minPrice = $shopeeProduct->price;
-                $shopeeProduct->maxPrice = $children->filter(self::pageClass[ShopeeConstants::PRODUCT_PRICE])->eq(1)->text(self::failMsg);
+                $shopeeProduct->maxPrice = $price->eq(1)->text(self::failMsg);
             }
-            if ($children->filter(self::pageClass[ShopeeConstants::PRODUCT_ORIGINAL_PRICE])->count() > 0) {
-                $shopeeProduct->originalPrice = $children->filter(self::pageClass[ShopeeConstants::PRODUCT_ORIGINAL_PRICE])->text(self::failMsg);
+            if ($originalPrice->count() > 0) {
+                $shopeeProduct->originalPrice = $originalPrice->text(self::failMsg);
             }
-            try {
-                $shopeeProduct->imageUrl = $children->filter(self::pageClass[ShopeeConstants::PRODUCT_IMAGE])->attr('src');
-            } catch (\Exception $e) {
+            if ($imageUrl->count() > 0) {
+                $shopeeProduct->imageUrl = $imageUrl->attr('src');
             }
+            // try {
+            //     $shopeeProduct->imageUrl = $children->filter(self::pageClass[ShopeeConstants::PRODUCT_IMAGE])->attr('src');
+            // } catch (\Exception $e) {
+            // }
             $this->shopeeProducts[$shopeeProduct->name] = $shopeeProduct->toArray();
         });
     }
