@@ -16,7 +16,7 @@ class ShopeeProductScraper
         'original_price' => 'div.d5DWld',
         'location' => 'div.zGGwiV',
         'sold' => 'div.r6HknA',
-        'ad' => 'div.Sh+UIZ',
+        'ad' => 'div.F7xq8U',
     ];
 
     const baseUrl = "https://shopee.ph/";
@@ -26,6 +26,7 @@ class ShopeeProductScraper
     private $crawler;
 
     private static $verbose = false;
+    private static $hasSales = false;
 
     private $shopeeProducts = [];
     private $page = 0;
@@ -34,18 +35,22 @@ class ShopeeProductScraper
     public function __construct(string $keyword)
     {
         $this->keyword = $keyword;
-        if (self::$verbose) {
-            echo "Reading existing keyword file...\n";
-        }
+        $this->logMsg("Reading existing keyword file...");
         $this->readFile();
+        $this->logMsg("Initializing client...");
+        $this->client = Client::createChromeClient(null, [
+            "--headless",
+            "--disable-gpu"
+        ]);
+        $this->logMsg("Initializing crawler...");
+        $this->crawler = $this->client->request('GET', self::baseUrl . "search?keyword=" . urlencode($this->keyword) . "&page={$this->page}");
+    }
+
+    public function logMsg($str)
+    {
         if (self::$verbose) {
-            echo "Initializing client...\n";
+            echo $str . "\n";
         }
-        $this->client = Client::createFirefoxClient();
-        if (self::$verbose) {
-            echo "Initializing crawler...\n";
-        }
-        $this->crawler = $this->client->request('GET', self::baseUrl . "search?keyword={$keyword}&page={$this->page}");
     }
 
     public static function parseArgument(array $args)
@@ -58,10 +63,13 @@ class ShopeeProductScraper
                     case 'verbose':
                         self::$verbose = true;
                         break;
+                    case 'has-sold':
+                        self::$hasSales = true;
+                        break;
                     default:
                         break;
                 }
-                break;
+                continue;
             }
             $keyword .= $args[$i];
             if ($i < $len - 1) {
@@ -83,18 +91,33 @@ class ShopeeProductScraper
 
     private function crawl()
     {
+        $this->logMsg("Scraping products...");
         $this->crawler->filter(self::pageClass['root'])->each(function ($node) {
             $children = $node->children();
+            $ad = $children->filter(self::pageClass['ad'])->count() > 0;
+            $sold = $children->filter(self::pageClass['sold'])->text(self::failMsg);
+            if ($ad) {
+                return;
+            }
+            if (self::$hasSales && $sold == "") {
+                return;
+            }
             $shopeeProduct = new ShopeeProduct($children->filter(self::pageClass['name'])->text(self::failMsg));
             $shopeeProduct->url = self::baseUrl . $node->attr('href');
+            $shopeeProduct->location = $children->filter(self::pageClass['location'])->text(self::failMsg);
+            $shopeeProduct->sold = $sold;
+            $shopeeProduct->currency = $children->filter(self::pageClass['currency'])->eq(0)->text(self::failMsg);
+            $shopeeProduct->price = $children->filter(self::pageClass['price'])->eq(0)->text(self::failMsg);
+            if ($children->filter(self::pageClass['price'])->count() > 1) {
+                $shopeeProduct->minPrice = $shopeeProduct->price;
+                $shopeeProduct->maxPrice = $children->filter(self::pageClass['price'])->eq(1)->text(self::failMsg);
+            }
+            if ($children->filter(self::pageClass['original_price'])->count() > 0) {
+                $shopeeProduct->originalPrice = $children->filter(self::pageClass['original_price'])->text(self::failMsg);
+            }
             try {
                 $shopeeProduct->imageUrl = $children->filter(self::pageClass['image'])->attr('src');
             } catch (\Exception $e) {
-            }
-            $shopeeProduct->location = $children->filter(self::pageClass['location'])->text(self::failMsg);
-            $shopeeProduct->sold = $children->filter(self::pageClass['sold'])->text(self::failMsg);
-            if ($shopeeProduct->sold == "") {
-                return;
             }
             $this->shopeeProducts[$shopeeProduct->name] = $shopeeProduct->toArray();
         });
@@ -102,9 +125,7 @@ class ShopeeProductScraper
 
     private function scrollToBottom()
     {
-        if (self::$verbose) {
-            echo "Scrolling to bottom...\n";
-        }
+        $this->logMsg("Scrolling to bottom...");
         $this->client->executeScript('window.scrollTo({top: document.body.scrollHeight, behavior: "smooth"})');
         $this->crawler = $this->client->getCrawler();
     }
@@ -112,8 +133,8 @@ class ShopeeProductScraper
     private function waitToLoad()
     {
         try {
-            $this->client->waitFor(".shopee-search-item-result__items", 2, 100);
-            $this->client->waitFor(".vc8g9F", 1, 1);
+            $this->logMsg("Waiting for items to load...");
+            $this->client->waitFor(".shopee-search-item-result__items", 5, 100);
             return true;
         } catch (\Exception $e) {
             return false;
@@ -123,10 +144,8 @@ class ShopeeProductScraper
     private function nextPage()
     {
         $this->page++;
-        $this->crawler = $this->client->request('GET', self::baseUrl . "search?keyword={$this->keyword}&page={$this->page}");
-        if (self::$verbose) {
-            echo "Page " . ($this->page + 1) . " loaded\n";
-        }
+        $this->crawler = $this->client->request('GET', self::baseUrl . "search?keyword=" . urlencode($this->keyword) . "&page={$this->page}");
+        $this->logMsg("Page " . ($this->page + 1) . " loaded");
     }
 
     private function outputJson()
@@ -134,9 +153,7 @@ class ShopeeProductScraper
         $filename = str_replace(' ', '_', $this->keyword) . '.json';
         $json = json_encode($this->shopeeProducts, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         file_put_contents(FILE_ROOT . "data_scraped/{$filename}", $json);
-        if (self::$verbose) {
-            echo "File data_scraped/{$filename} created\n";
-        }
+        $this->logMsg("File data_scraped/{$filename} created");
     }
 
     public function scrape()
@@ -146,14 +163,12 @@ class ShopeeProductScraper
             if ($this->waitToLoad()) {
                 $this->scrollToBottom();
                 $this->crawl();
+                $this->outputJson();
                 $this->nextPage();
-                if (self::$verbose) {
-                    echo "Products Scraped: " . count($this->shopeeProducts) . "\n";
-                }
+                $this->logMsg("Products Scraped: " . count($this->shopeeProducts) . "\n");
             } else {
                 break;
             }
         }
-        $this->outputJson();
     }
 }
