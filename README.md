@@ -8,6 +8,7 @@ Contents
 * [Why?](#why)
 * [Installation](#installation)
 * [Usage](#usage)
+* [Planned-Features](#planned-features)
 
 ### Why?
 
@@ -41,3 +42,12 @@ See all commands and options.
 ```
 php scraper.php --help
 ```
+
+### Planned-Features
+---
+
+* Product Category Filtering
+* Star Rating Filtering
+* Price Range Filtering
+* Store Product Scraping
+* CSV output
